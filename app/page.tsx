@@ -330,7 +330,15 @@ export default function Home() {
       );
     } else {
       // 不在 SQL 代码块内，累积到 AI 回答
-      const chunk = pendingNewlineAfterSql.current && trimmedMessage !== "" ? `\n${message}` : message;
+      if (pendingNewlineAfterSql.current && trimmedMessage === "") {
+        // 跳过空片段，等待下一个非空片段换行后再写入
+        return;
+      }
+
+      const chunk = pendingNewlineAfterSql.current
+        ? `\n${message.trimStart()}`
+        : message;
+
       aiAnswerRef.current += chunk;
       pendingNewlineAfterSql.current = false;
       console.log("💬 AI chunk:", chunk);
