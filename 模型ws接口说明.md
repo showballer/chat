@@ -43,13 +43,6 @@
 
 ### 3. SQL生成过程
 **类型**: 🔄 **流式返回**
-**来源**: `text2sql_chain` 模型的流式输出
-**特点**:
-- 使用 `chain.astream()` 方法逐token生成
-- 每个 `chunk.content` 立即发送给客户端
-- 包含0.01秒的发送间隔控制流速
-- 每次发送包含完整的chunk内容
-- 累积所有chunks形成最终SQL语句
 
 **示例流式输出**:
 ```
@@ -60,7 +53,6 @@
 "SELECT * FROM users_table WHERE"
 "SELECT * FROM users_table WHERE date >= '2024-01-01'"
 ```
-
 ### 4. SQL生成完成标志
 **类型**: 直接返回
 **消息**: `"DONE"`
@@ -69,11 +61,6 @@
 **类型**: 直接返回
 **消息**: `"最终SQL语句: {处理后的SQL语句}"`
 
-**处理流程**:
-1. 从流式内容中提取SQL语句
-2. 应用部门缩写处理 (`abbr_process` with `distinct_dept_dict`)
-3. 应用项目缩写处理 (`abbr_process` with `distinct_project_dict`)
-4. 返回最终处理后的SQL语句
 
 ### 6. SQL执行阶段
 

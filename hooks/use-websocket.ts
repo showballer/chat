@@ -15,49 +15,85 @@ interface UseWebSocketOptions {
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
-  const [isConnected, setIsConnected] = useState(false);
+  const [serverAvailable, setServerAvailable] = useState<boolean | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const { toast } = useToast();
 
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
-  const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 3;
-  const hasShownErrorRef = useRef(false);
+  // Test server availability once on mount
+  const testServerAvailability = useCallback(() => {
+    console.log("Testing WebSocket server availability...");
+    const testWs = new WebSocket(
+      process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://172.31.24.111:12224/ws"
+    );
 
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      return;
-    }
+    const timeout = setTimeout(() => {
+      if (testWs.readyState !== WebSocket.OPEN) {
+        testWs.close();
+        setServerAvailable(false);
+        console.log("❌ WebSocket server is not available");
+      }
+    }, 3000);
 
-    // Don't show error toast on initial connection attempts
-    if (reconnectAttempts.current === 0) {
-      console.log("Attempting to connect to WebSocket...");
-    }
+    testWs.onopen = () => {
+      clearTimeout(timeout);
+      setServerAvailable(true);
+      console.log("✅ WebSocket server is available");
+      // Close test connection immediately
+      testWs.close();
+    };
 
-    try {
-      const ws = new WebSocket(process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://172.31.24.111:12224/ws");
-      wsRef.current = ws;
+    testWs.onerror = () => {
+      clearTimeout(timeout);
+      setServerAvailable(false);
+      console.log("❌ WebSocket server connection failed");
+    };
+  }, []);
+
+  // Create a new WebSocket connection for a query
+  const createConnection = useCallback((): Promise<WebSocket> => {
+    return new Promise((resolve, reject) => {
+      console.log("Creating new WebSocket connection...");
+      const ws = new WebSocket(
+        process.env.NEXT_PUBLIC_WEBSOCKET_URL || "ws://172.31.24.111:12224/ws"
+      );
+
+      const timeout = setTimeout(() => {
+        ws.close();
+        reject(new Error("Connection timeout"));
+      }, 5000);
 
       ws.onopen = () => {
-        console.log("WebSocket connected successfully");
-        setIsConnected(true);
-        reconnectAttempts.current = 0;
-        hasShownErrorRef.current = false;
+        clearTimeout(timeout);
+        console.log("✅ WebSocket connected");
+        wsRef.current = ws;
+        setServerAvailable(true);
+        resolve(ws);
+      };
+
+      ws.onerror = (error) => {
+        clearTimeout(timeout);
+        console.error("❌ WebSocket connection error:", error);
+        setServerAvailable(false);
+        reject(error);
       };
 
       ws.onmessage = (event) => {
         const message = event.data;
-        console.log("WebSocket message:", message);
+        console.log("📨 WebSocket message:", message);
 
         if (message === "DONE") {
           setIsProcessing(false);
+          // Close connection after query completes
+          setTimeout(() => {
+            ws.close();
+            wsRef.current = null;
+          }, 1000);
           return;
         }
 
         // Handle different message types
         if (message.includes("最终SQL语句:")) {
-          const sql = message.replace("最终SQL语句:", "").trim();
           options.onMessage?.(message);
         } else if (message.includes("SQL查询成功")) {
           options.onMessage?.(message);
@@ -70,106 +106,61 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         }
       };
 
-      ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        setIsConnected(false);
-        // Only show toast once to avoid spam
-        if (!hasShownErrorRef.current && reconnectAttempts.current > 0) {
-          hasShownErrorRef.current = true;
-          toast({
-            variant: "destructive",
-            title: "连接错误",
-            description: "WebSocket 服务器连接失败，请检查服务器是否运行",
-          });
-        }
-      };
-
       ws.onclose = () => {
         console.log("WebSocket disconnected");
-        setIsConnected(false);
         setIsProcessing(false);
-
-        // Attempt to reconnect with exponential backoff
-        if (reconnectAttempts.current < maxReconnectAttempts) {
-          reconnectAttempts.current += 1;
-          const delay = Math.min(2000 * reconnectAttempts.current, 10000);
-          console.log(`Will retry connection in ${delay}ms (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
-
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, delay);
-        } else {
-          // Only show final error if not already shown
-          if (!hasShownErrorRef.current) {
-            hasShownErrorRef.current = true;
-            toast({
-              variant: "destructive",
-              title: "无法连接到 WebSocket 服务器",
-              description: "请确保 WebSocket 服务器正在运行，或在连接后使用系统",
-            });
-          }
-        }
+        wsRef.current = null;
       };
-    } catch (error) {
-      console.error("Failed to create WebSocket:", error);
-      setIsConnected(false);
-    }
-  }, [options, toast]);
+    });
+  }, [options]);
 
-  const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    setIsConnected(false);
-  }, []);
+  const sendQuery = useCallback(
+    async (query: string) => {
+      try {
+        setIsProcessing(true);
 
-  const sendQuery = useCallback((query: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      toast({
-        variant: "destructive",
-        title: "连接未建立",
-        description: "请等待 WebSocket 连接建立",
-      });
-      return false;
-    }
+        // Create new connection for this query
+        const ws = await createConnection();
 
-    try {
-      setIsProcessing(true);
-      const message = JSON.stringify({
-        type: "query",
-        query: query,
-      });
-      wsRef.current.send(message);
-      return true;
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      setIsProcessing(false);
-      toast({
-        variant: "destructive",
-        title: "发送失败",
-        description: "消息发送失败，请重试",
-      });
-      return false;
-    }
-  }, [toast]);
+        const message = JSON.stringify({
+          type: "query",
+          query: query,
+        });
 
+        ws.send(message);
+        console.log("📤 Query sent:", query);
+        return true;
+      } catch (error) {
+        console.error("Failed to send query:", error);
+        setIsProcessing(false);
+        toast({
+          variant: "destructive",
+          title: "发送失败",
+          description: "无法连接到服务器，请确保 WebSocket 服务正在运行",
+        });
+        return false;
+      }
+    },
+    [createConnection, toast]
+  );
+
+  // Test server on mount
   useEffect(() => {
-    connect();
+    testServerAvailability();
 
+    // Cleanup on unmount
     return () => {
-      disconnect();
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
-  }, [connect, disconnect]);
+  }, [testServerAvailability]);
 
   return {
-    isConnected,
+    isConnected: serverAvailable === true,
     isProcessing,
     sendQuery,
-    connect,
-    disconnect,
+    serverAvailable,
   };
 }
