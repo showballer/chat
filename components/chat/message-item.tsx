@@ -55,10 +55,10 @@ export function MessageItem({ message }: MessageItemProps) {
         )}
 
         {/* 处理中状态 */}
-        {isProcessing && !message.sqlQuery && (
+        {isProcessing && !message.content && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>正在生成 SQL 查询...</span>
+            <span>正在处理您的查询...</span>
           </div>
         )}
 
