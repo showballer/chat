@@ -80,9 +80,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
       ws.onmessage = (event) => {
         const message = event.data;
+        const trimmedMessage = typeof message === "string" ? message.trim() : message;
         console.log("📨 WebSocket message:", message);
 
-        if (message === "DONE") {
+        if (trimmedMessage === "DONE") {
+          options.onMessage?.(message);
           setIsProcessing(false);
           // Close connection after query completes
           setTimeout(() => {
