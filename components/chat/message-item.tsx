@@ -14,6 +14,7 @@ interface Message {
   status?: string | null;
   errorMessage?: string | null;
   createdAt: Date;
+  isNew?: boolean;
 }
 
 interface MessageItemProps {
@@ -23,6 +24,7 @@ interface MessageItemProps {
 export function MessageItem({ message }: MessageItemProps) {
   const [showSQL, setShowSQL] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
+  const [showResult, setShowResult] = useState(message.isNew !== false);
 
   const isUser = message.role === "user";
   const isProcessing = message.status === "processing";
@@ -111,12 +113,27 @@ export function MessageItem({ message }: MessageItemProps) {
 
         {/* 查询结果 */}
         {message.queryResult && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <span>查询结果</span>
+          <div className="border rounded-lg overflow-hidden bg-background">
+            <div
+              className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => setShowResult(!showResult)}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium">查询结果</span>
+              </div>
+              {showResult ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
             </div>
-            <QueryResultTable data={message.queryResult} />
+
+            {showResult && (
+              <div className="border-t p-4 bg-muted/20">
+                <QueryResultTable data={message.queryResult} />
+              </div>
+            )}
           </div>
         )}
       </div>

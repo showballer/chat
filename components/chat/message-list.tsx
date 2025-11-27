@@ -12,6 +12,7 @@ interface Message {
   status?: string | null;
   errorMessage?: string | null;
   createdAt: Date;
+  isNew?: boolean;
 }
 
 interface MessageListProps {

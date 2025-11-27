@@ -25,6 +25,7 @@ interface Message {
   status?: string | null;
   errorMessage?: string | null;
   createdAt: Date;
+  isNew?: boolean;
 }
 
 export default function Home() {
@@ -388,7 +389,7 @@ export default function Home() {
       const response = await fetch(`/api/conversations/${id}`);
       const data = await response.json();
       setCurrentConversation(data);
-      setMessages(data.messages || []);
+      setMessages((data.messages || []).map((msg: Message) => ({ ...msg, isNew: false })));
     } catch (error) {
       console.error("Failed to load conversation:", error);
       toast({
@@ -478,7 +479,7 @@ export default function Home() {
         }),
       });
       const userMessage = await userMessageResponse.json();
-      setMessages((prev) => [...prev, userMessage]);
+      setMessages((prev) => [...prev, { ...userMessage, isNew: true }]);
 
       // Create assistant message placeholder
       const assistantMessageResponse = await fetch("/api/messages", {
@@ -492,7 +493,7 @@ export default function Home() {
         }),
       });
       const assistantMessage = await assistantMessageResponse.json();
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, { ...assistantMessage, isNew: true }]);
 
       currentMessageIdRef.current = assistantMessage.id;
       aiAnswerRef.current = "";
