@@ -72,6 +72,8 @@ export default function Home() {
       console.log("✅ AI answer completed");
 
       const messageId = currentMessageIdRef.current;
+      // 若仍处于 SQL 流，强制闭合，避免后续文本继续写入 SQL
+      inSqlCodeBlock.current = false;
       // 处理 AI 回答，移除其中的 SQL 代码块
       let finalAnswer = aiAnswerRef.current;
       const sqlBlockMatch = finalAnswer.match(/```(?:sql)?\s*([\s\S]*?)\s*```/i);
@@ -278,7 +280,7 @@ export default function Home() {
       return;
     }
 
-    // 7. 检测 SQL 代码块标记（支持分片的 ``` + sql 开头）
+    // 7. 检测 SQL 代码块标记（只识别成对的 ``` 或 ```sql，避免单个反引号误触）
     if (trimmedMessage.startsWith("```")) {
       if (!inSqlCodeBlock.current) {
         inSqlCodeBlock.current = true;
@@ -288,6 +290,11 @@ export default function Home() {
         inSqlCodeBlock.current = false;
         console.log("✅ SQL code block ended");
       }
+      return;
+    }
+    if (inSqlCodeBlock.current && trimmedMessage === "``") {
+      inSqlCodeBlock.current = false;
+      console.log("✅ SQL code block ended");
       return;
     }
 
