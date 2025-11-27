@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  title     String   @default("新对话")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  role           String       // "user" or "assistant"
+  content        String       @db.Text
+  sqlQuery       String?      @db.Text
+  queryResult    Json?
+  status         String?      // "processing", "completed", "error"
+  errorMessage   String?      @db.Text
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+  @@index([conversationId])
+}
