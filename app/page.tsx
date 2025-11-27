@@ -38,6 +38,7 @@ export default function Home() {
   const aiAnswerRef = useRef<string>("");
   const sqlCodeBlockRef = useRef<string>("");
   const inSqlCodeBlock = useRef<boolean>(false);
+  const pendingNewlineAfterSql = useRef<boolean>(false);
 
   const handleWebSocketMessage = useCallback(async (message: string) => {
     console.log("📨 WS Message:", message);
@@ -74,6 +75,7 @@ export default function Home() {
       const messageId = currentMessageIdRef.current;
       // 若仍处于 SQL 流，强制闭合，避免后续文本继续写入 SQL
       inSqlCodeBlock.current = false;
+      pendingNewlineAfterSql.current = true;
       // 处理 AI 回答，移除其中的 SQL 代码块
       let finalAnswer = aiAnswerRef.current;
       const sqlBlockMatch = finalAnswer.match(/```(?:sql)?\s*([\s\S]*?)\s*```/i);
@@ -277,6 +279,7 @@ export default function Home() {
       aiAnswerRef.current = "";
       sqlCodeBlockRef.current = "";
       inSqlCodeBlock.current = false;
+      pendingNewlineAfterSql.current = false;
       return;
     }
 
@@ -285,16 +288,24 @@ export default function Home() {
       if (!inSqlCodeBlock.current) {
         inSqlCodeBlock.current = true;
         sqlCodeBlockRef.current = "";
+        pendingNewlineAfterSql.current = false;
         console.log("📝 SQL code block started");
       } else {
         inSqlCodeBlock.current = false;
+        pendingNewlineAfterSql.current = true;
         console.log("✅ SQL code block ended");
       }
       return;
     }
     if (inSqlCodeBlock.current && trimmedMessage === "``") {
       inSqlCodeBlock.current = false;
+      pendingNewlineAfterSql.current = true;
       console.log("✅ SQL code block ended");
+      return;
+    }
+    if (!inSqlCodeBlock.current && (trimmedMessage === "`" || trimmedMessage === "")) {
+      // 忽略代码块结束后多余的反引号或空行
+      pendingNewlineAfterSql.current = false;
       return;
     }
 
@@ -319,8 +330,10 @@ export default function Home() {
       );
     } else {
       // 不在 SQL 代码块内，累积到 AI 回答
-      aiAnswerRef.current += message;
-      console.log("💬 AI chunk:", message);
+      const chunk = pendingNewlineAfterSql.current && trimmedMessage !== "" ? `\n${message}` : message;
+      aiAnswerRef.current += chunk;
+      pendingNewlineAfterSql.current = false;
+      console.log("💬 AI chunk:", chunk);
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === currentMessageIdRef.current
