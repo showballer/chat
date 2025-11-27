@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { User, Bot, Loader2 } from "lucide-react";
+import { User, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { QueryResultTable } from "./query-result-table";
 
 interface Message {
@@ -20,58 +21,101 @@ interface MessageItemProps {
 }
 
 export function MessageItem({ message }: MessageItemProps) {
+  const [showSQL, setShowSQL] = useState(false);
+  const [showThinking, setShowThinking] = useState(false);
+
   const isUser = message.role === "user";
   const isProcessing = message.status === "processing";
   const isError = message.status === "error";
+  const isCompleted = message.status === "completed";
+
+  if (isUser) {
+    return (
+      <div className="flex gap-4 p-4">
+        <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md bg-primary text-primary-foreground">
+          <User className="h-4 w-4" />
+        </div>
+        <div className="flex-1 pt-1">
+          <div className="text-sm">{message.content}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className={cn(
-        "flex gap-4 p-4 rounded-lg transition-colors",
-        isUser ? "bg-muted/50" : "bg-background"
-      )}
-    >
-      <div
-        className={cn(
-          "flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md",
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-secondary text-secondary-foreground"
-        )}
-      >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+    <div className="flex gap-4 p-4 bg-muted/30">
+      <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+        <Bot className="h-4 w-4" />
       </div>
 
-      <div className="flex-1 space-y-3 overflow-hidden">
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <div className="whitespace-pre-wrap break-words">{message.content}</div>
-        </div>
+      <div className="flex-1 space-y-4 overflow-hidden">
+        {/* AI 回答内容 */}
+        {message.content && (
+          <div className="text-sm leading-relaxed">{message.content}</div>
+        )}
 
-        {isProcessing && (
+        {/* 处理中状态 */}
+        {isProcessing && !message.sqlQuery && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>处理中...</span>
+            <span>正在生成 SQL 查询...</span>
           </div>
         )}
 
+        {/* SQL 查询展开区 */}
         {message.sqlQuery && (
-          <div className="space-y-2">
-            <div className="text-sm font-medium text-muted-foreground">生成的SQL:</div>
-            <pre className="bg-muted p-3 rounded-md overflow-x-auto text-sm">
-              <code>{message.sqlQuery}</code>
-            </pre>
+          <div className="border rounded-lg overflow-hidden bg-background">
+            <div
+              className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => setShowSQL(!showSQL)}
+            >
+              <div className="flex items-center gap-2">
+                {isCompleted && (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                )}
+                {isProcessing && (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                )}
+                <span className="text-sm font-medium">
+                  {isProcessing ? "正在生成 SQL..." : "查看生成的 SQL"}
+                </span>
+              </div>
+              {showSQL ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+
+            {showSQL && (
+              <div className="border-t p-4 bg-muted/20">
+                <pre className="text-sm overflow-x-auto">
+                  <code className="language-sql">{message.sqlQuery}</code>
+                </pre>
+              </div>
+            )}
           </div>
         )}
 
+        {/* 错误信息 */}
         {isError && message.errorMessage && (
-          <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm">
-            {message.errorMessage}
+          <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5">
+            <div className="flex items-start gap-2">
+              <div className="text-destructive text-sm font-medium">错误信息:</div>
+            </div>
+            <div className="mt-2 text-sm text-destructive/90">
+              {message.errorMessage}
+            </div>
           </div>
         )}
 
+        {/* 查询结果 */}
         {message.queryResult && (
           <div className="space-y-2">
-            <div className="text-sm font-medium text-muted-foreground">查询结果:</div>
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span>查询结果</span>
+            </div>
             <QueryResultTable data={message.queryResult} />
           </div>
         )}

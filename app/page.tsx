@@ -34,77 +34,163 @@ export default function Home() {
   const { toast } = useToast();
 
   const currentMessageIdRef = useRef<string | null>(null);
-  const sqlContentRef = useRef<string>("");
-  const fullContentRef = useRef<string>("");
+  const sqlStreamRef = useRef<string>("");
 
   const handleWebSocketMessage = useCallback(async (message: string) => {
-    console.log("Handling message:", message);
+    console.log("📨 WS Message:", message);
 
     if (!currentMessageIdRef.current) return;
 
-    // Accumulate SQL generation content
+    // 1. 思考过程消息（不在主内容显示，仅更新状态）
     if (
-      !message.includes("正在") &&
-      !message.includes("DONE") &&
-      !message.includes("最终SQL语句") &&
-      !message.includes("查询成功") &&
-      !message.includes("查询失败")
+      message.includes("正在处理查询请求") ||
+      message.includes("正在调用text2sql模型") ||
+      message.includes("正在执行SQL查询") ||
+      message.includes("正在尝试重写SQL") ||
+      message.includes("正在执行重写后的SQL")
     ) {
-      sqlContentRef.current += message;
-      fullContentRef.current += message + "\n";
-    } else {
-      fullContentRef.current += message + "\n";
+      console.log("🤔 Thinking:", message);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === currentMessageIdRef.current
+            ? { ...msg, status: "processing" }
+            : msg
+        )
+      );
+      return;
     }
 
-    // Update message content in real-time
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === currentMessageIdRef.current
-          ? { ...msg, content: fullContentRef.current }
-          : msg
-      )
-    );
+    // 2. DONE 标记（SQL 生成完成）
+    if (message === "DONE") {
+      console.log("✅ SQL generation completed");
+      return;
+    }
 
-    // Handle final SQL
+    // 3. 最终 SQL 语句
     if (message.includes("最终SQL语句:")) {
-      const sql = message.replace("最终SQL语句:", "").trim();
+      const sql = message.replace("最终SQL语句:", "").trim().replace(/```sql|```/g, "");
+      console.log("💾 Final SQL:", sql);
+
       await fetch(`/api/messages/${currentMessageIdRef.current}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sqlQuery: sql,
-          content: fullContentRef.current,
+          content: "根据您的查询需求，我已生成并执行了相应的 SQL 语句。",
         }),
       });
 
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === currentMessageIdRef.current
-            ? { ...msg, sqlQuery: sql, content: fullContentRef.current }
+            ? {
+                ...msg,
+                sqlQuery: sql,
+                content: "根据您的查询需求，我已生成并执行了相应的 SQL 语句。",
+              }
             : msg
         )
       );
+
+      // 清空流式SQL累积
+      sqlStreamRef.current = "";
+      return;
     }
 
-    // Handle query success
-    if (message.includes("查询成功")) {
+    // 4. 查询成功
+    if (message.includes("SQL查询成功") || message.includes("查询成功")) {
+      const match = message.match(/结果行数[：:]\s*(\d+)/);
+      const rowCount = match ? match[1] : "未知";
+      console.log("✅ Query success, rows:", rowCount);
+
       await fetch(`/api/messages/${currentMessageIdRef.current}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "completed",
-          content: fullContentRef.current,
+          content: `查询执行成功！共返回 ${rowCount} 条数据记录。`,
         }),
       });
 
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === currentMessageIdRef.current
-            ? { ...msg, status: "completed", content: fullContentRef.current }
+            ? {
+                ...msg,
+                status: "completed",
+                content: `查询执行成功！共返回 ${rowCount} 条数据记录。`,
+              }
             : msg
         )
       );
+      return;
     }
+
+    // 5. 查询失败
+    if (message.includes("SQL查询失败") || message.includes("查询失败")) {
+      console.log("❌ Query failed:", message);
+
+      await fetch(`/api/messages/${currentMessageIdRef.current}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "error",
+          errorMessage: message,
+          content: "查询执行失败，请查看错误详情。",
+        }),
+      });
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === currentMessageIdRef.current
+            ? {
+                ...msg,
+                status: "error",
+                errorMessage: message,
+                content: "查询执行失败，请查看错误详情。",
+              }
+            : msg
+        )
+      );
+      return;
+    }
+
+    // 6. SQL 重写相关信息
+    if (message.includes("重写的SQL") || message.includes("模型重写")) {
+      console.log("🔄 SQL rewrite info:", message);
+      return;
+    }
+
+    // 7. 异常处理
+    if (message.includes("异常") || message.includes("错误")) {
+      console.log("⚠️ Exception:", message);
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === currentMessageIdRef.current
+            ? {
+                ...msg,
+                status: "error",
+                errorMessage: message,
+                content: "处理过程中发生异常。",
+              }
+            : msg
+        )
+      );
+      return;
+    }
+
+    // 8. 流式 SQL 生成片段（累积显示）
+    sqlStreamRef.current += message;
+    console.log("📝 SQL Stream chunk:", message);
+
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === currentMessageIdRef.current
+          ? { ...msg, sqlQuery: sqlStreamRef.current }
+          : msg
+      )
+    );
   }, []);
 
   const handleWebSocketError = useCallback(async (error: string) => {
@@ -116,7 +202,7 @@ export default function Home() {
       body: JSON.stringify({
         status: "error",
         errorMessage: error,
-        content: fullContentRef.current,
+        content: "连接或处理过程中发生错误。",
       }),
     });
 
@@ -127,15 +213,14 @@ export default function Home() {
               ...msg,
               status: "error",
               errorMessage: error,
-              content: fullContentRef.current,
+              content: "连接或处理过程中发生错误。",
             }
           : msg
       )
     );
 
     currentMessageIdRef.current = null;
-    sqlContentRef.current = "";
-    fullContentRef.current = "";
+    sqlStreamRef.current = "";
   }, []);
 
   const { isConnected, isProcessing, sendQuery } = useWebSocket({
@@ -227,9 +312,26 @@ export default function Home() {
   };
 
   const handleSendMessage = async (content: string) => {
-    if (!currentConversation) {
-      await handleNewConversation();
-      return;
+    // 如果没有当前对话，先创建一个
+    let targetConversation = currentConversation;
+    if (!targetConversation) {
+      try {
+        const response = await fetch("/api/conversations", {
+          method: "POST",
+        });
+        const newConversation = await response.json();
+        setConversations((prev) => [newConversation, ...prev]);
+        setCurrentConversation(newConversation);
+        targetConversation = newConversation;
+      } catch (error) {
+        console.error("Failed to create conversation:", error);
+        toast({
+          variant: "destructive",
+          title: "创建失败",
+          description: "无法创建新对话",
+        });
+        return;
+      }
     }
 
     try {
@@ -238,7 +340,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          conversationId: currentConversation.id,
+          conversationId: targetConversation.id,
           role: "user",
           content: content,
         }),
@@ -251,9 +353,9 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          conversationId: currentConversation.id,
+          conversationId: targetConversation.id,
           role: "assistant",
-          content: "",
+          content: "正在处理您的查询...",
           status: "processing",
         }),
       });
@@ -261,22 +363,33 @@ export default function Home() {
       setMessages((prev) => [...prev, assistantMessage]);
 
       currentMessageIdRef.current = assistantMessage.id;
-      sqlContentRef.current = "";
-      fullContentRef.current = "";
+      sqlStreamRef.current = "";
 
       // Send query via WebSocket
       sendQuery(content);
 
-      // Update conversation title with first message
+      // Update conversation title with first message (only once)
       if (messages.length === 0) {
-        await fetch(`/api/conversations/${currentConversation.id}`, {
+        const newTitle = content.slice(0, 30) + (content.length > 30 ? "..." : "");
+        await fetch(`/api/conversations/${targetConversation.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            title: content.slice(0, 30) + (content.length > 30 ? "..." : ""),
+            title: newTitle,
           }),
         });
-        loadConversations();
+
+        // Update local state instead of refetching
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === targetConversation.id
+              ? { ...conv, title: newTitle }
+              : conv
+          )
+        );
+        setCurrentConversation((prev) =>
+          prev ? { ...prev, title: newTitle } : prev
+        );
       }
     } catch (error) {
       console.error("Failed to send message:", error);
