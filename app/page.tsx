@@ -37,8 +37,6 @@ export default function Home() {
   const currentMessageIdRef = useRef<string | null>(null);
   const aiAnswerRef = useRef<string>("");
   const sqlCodeBlockRef = useRef<string>("");
-  const inSqlCodeBlock = useRef<boolean>(false);
-  const pendingNewlineAfterSql = useRef<boolean>(false);
 
   const handleWebSocketMessage = useCallback(async (message: string) => {
     console.log("📨 WS Message:", message);
@@ -73,85 +71,28 @@ export default function Home() {
       console.log("✅ AI answer completed");
 
       const messageId = currentMessageIdRef.current;
-      // 若仍处于 SQL 流，强制闭合，避免后续文本继续写入 SQL
-      inSqlCodeBlock.current = false;
-      pendingNewlineAfterSql.current = true;
-      // 处理 AI 回答，移除其中的 SQL 代码块
-      let finalAnswer = aiAnswerRef.current;
-      const sqlBlockMatch = finalAnswer.match(/```(?:sql)?\s*([\s\S]*?)\s*```/i);
+      const finalAnswer = aiAnswerRef.current.trim();
 
-      if (sqlBlockMatch) {
-        // 提取 SQL 到单独的字段
-        const extractedSql = sqlBlockMatch[1].trim();
-        sqlCodeBlockRef.current = extractedSql;
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                content: finalAnswer,
+                status: "completed",
+              }
+            : msg
+        )
+      );
 
-        // 从 AI 回答中移除 SQL 代码块
-        finalAnswer = finalAnswer.replace(/```(?:sql)?\s*[\s\S]*?\s*```/i, '').trim();
-
-        console.log("📝 Extracted SQL from answer:", extractedSql);
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === messageId
-              ? {
-                  ...msg,
-                  content: finalAnswer,
-                  sqlQuery: extractedSql,
-                  status: "completed",
-                }
-              : msg
-          )
-        );
-
-        await fetch(`/api/messages/${messageId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: finalAnswer,
-            sqlQuery: extractedSql,
-            status: "completed",
-          }),
-        });
-      } else if (finalAnswer) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === messageId
-              ? { ...msg, content: finalAnswer, status: "completed" }
-              : msg
-          )
-        );
-
-        await fetch(`/api/messages/${messageId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: finalAnswer,
-            status: "completed",
-          }),
-        });
-      } else {
-        // 没有正文时也要标记完成，且保留已累积的 SQL
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === messageId
-              ? {
-                  ...msg,
-                  status: "completed",
-                  sqlQuery: sqlCodeBlockRef.current || msg.sqlQuery,
-                }
-              : msg
-          )
-        );
-
-        await fetch(`/api/messages/${messageId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: "completed",
-            sqlQuery: sqlCodeBlockRef.current || null,
-          }),
-        });
-      }
+      await fetch(`/api/messages/${messageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: finalAnswer,
+          status: "completed",
+        }),
+      });
       return;
     }
 
@@ -189,19 +130,6 @@ export default function Home() {
         // 尝试解析 JSON
         const result = JSON.parse(message);
         console.log("📊 Query Result:", result);
-
-        // 如果还没有处理过 DONE（AI 回答中可能包含 SQL 代码块）
-        if (aiAnswerRef.current) {
-          const sqlBlockMatch = aiAnswerRef.current.match(/```(?:sql)?\s*([\s\S]*?)\s*```/i);
-          if (sqlBlockMatch) {
-            const extractedSql = sqlBlockMatch[1].trim();
-            sqlCodeBlockRef.current = extractedSql;
-            aiAnswerRef.current = aiAnswerRef.current
-              .replace(/```(?:sql)?\s*[\s\S]*?\s*```/i, '')
-              .trim();
-            console.log("📝 Extracted SQL from answer before result:", extractedSql);
-          }
-        }
 
         if (result.status === "success") {
           if (result.sql) {
@@ -278,78 +206,22 @@ export default function Home() {
       currentMessageIdRef.current = null;
       aiAnswerRef.current = "";
       sqlCodeBlockRef.current = "";
-      inSqlCodeBlock.current = false;
-      pendingNewlineAfterSql.current = false;
       return;
     }
 
-    // 7. 检测 SQL 代码块标记（只识别成对的 ``` 或 ```sql，避免单个反引号误触）
-    if (trimmedMessage.startsWith("```")) {
-      if (!inSqlCodeBlock.current) {
-        inSqlCodeBlock.current = true;
-        sqlCodeBlockRef.current = "";
-        pendingNewlineAfterSql.current = false;
-        console.log("📝 SQL code block started");
-      } else {
-        inSqlCodeBlock.current = false;
-        pendingNewlineAfterSql.current = true;
-        console.log("✅ SQL code block ended");
-      }
+    // 7. 流式内容处理（不再截取 SQL 代码块，全部写入 AI 回答）
+    if (trimmedMessage === "" || trimmedMessage === "```" || trimmedMessage === "``" || trimmedMessage === "`") {
       return;
     }
-    if (inSqlCodeBlock.current && trimmedMessage === "``") {
-      inSqlCodeBlock.current = false;
-      pendingNewlineAfterSql.current = true;
-      console.log("✅ SQL code block ended");
-      return;
-    }
-    if (!inSqlCodeBlock.current && (trimmedMessage === "`" || trimmedMessage === "")) {
-      // 忽略代码块结束后多余的反引号或空行
-      pendingNewlineAfterSql.current = false;
-      return;
-    }
-
-    // 8. 流式内容处理
-    if (inSqlCodeBlock.current) {
-      // 在 SQL 代码块内，累积到 SQL
-      if (
-        sqlCodeBlockRef.current === "" &&
-        trimmedMessage.toLowerCase() === "sql"
-      ) {
-        // 跳过语言标识
-        return;
-      }
-      sqlCodeBlockRef.current += message;
-      console.log("📝 SQL chunk:", message);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === currentMessageIdRef.current
-            ? { ...msg, sqlQuery: sqlCodeBlockRef.current.trim() }
-            : msg
-        )
-      );
-    } else {
-      // 不在 SQL 代码块内，累积到 AI 回答
-      if (pendingNewlineAfterSql.current && trimmedMessage === "") {
-        // 跳过空片段，等待下一个非空片段换行后再写入
-        return;
-      }
-
-      const chunk = pendingNewlineAfterSql.current
-        ? `\n${message.trimStart()}`
-        : message;
-
-      aiAnswerRef.current += chunk;
-      pendingNewlineAfterSql.current = false;
-      console.log("💬 AI chunk:", chunk);
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === currentMessageIdRef.current
-            ? { ...msg, content: aiAnswerRef.current.trim() }
-            : msg
-        )
-      );
-    }
+    aiAnswerRef.current += message;
+    console.log("💬 AI chunk:", message);
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === currentMessageIdRef.current
+          ? { ...msg, content: aiAnswerRef.current.trim() }
+          : msg
+      )
+    );
   }, []);
 
   const handleWebSocketError = useCallback(async (error: string) => {
@@ -381,7 +253,6 @@ export default function Home() {
     currentMessageIdRef.current = null;
     aiAnswerRef.current = "";
     sqlCodeBlockRef.current = "";
-    inSqlCodeBlock.current = false;
   }, []);
 
   const { isConnected, isProcessing, sendQuery } = useWebSocket({
@@ -526,7 +397,6 @@ export default function Home() {
       currentMessageIdRef.current = assistantMessage.id;
       aiAnswerRef.current = "";
       sqlCodeBlockRef.current = "";
-      inSqlCodeBlock.current = false;
 
       // Send query via WebSocket
       sendQuery(content);
