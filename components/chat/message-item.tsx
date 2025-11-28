@@ -82,6 +82,8 @@ export function MessageItem({ message }: MessageItemProps) {
   const isError = message.status === "error";
   const isCompleted = message.status === "completed";
   const hasChartData = !!chartConfig;
+  const showErrorBlock = isError || !!message.errorMessage;
+  const noSqlGenerated = message.role === "assistant" && !isProcessing && !message.sqlQuery;
 
   // 调用后端接口生成图表
   const handleGenerateChart = async () => {
@@ -227,13 +229,13 @@ export function MessageItem({ message }: MessageItemProps) {
         )}
 
         {/* 错误信息 */}
-        {isError && message.errorMessage && (
+        {(showErrorBlock || noSqlGenerated) && (
           <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5">
             <div className="flex items-start gap-2">
               <div className="text-destructive text-sm font-medium">错误信息:</div>
             </div>
             <div className="mt-2 text-sm text-destructive/90">
-              {message.errorMessage}
+              {message.errorMessage || "没有SQL语句生成"}
             </div>
           </div>
         )}

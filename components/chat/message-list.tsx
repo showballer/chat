@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Database } from "lucide-react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,10 +33,15 @@ export function MessageList({
     "在第一季度中，智能云网部，有多少前评审项目",
     "在2025年6月，大数据事业部的工时成本，主要分布于哪三个项目中",
     "输出一份8月填报工时超过应填工时的人员清单",
-    "8月冯潇俊填报了多少工时？",
+    "7月冯潇俊填报了多少工时？",
     "各部门6月填报率情况",
     "基于岗位输出一份“LX2024-DS072-松江区数据资源平台建设（二期）”项目中人数的分布",
   ];
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages.length]);
 
   return (
     <ScrollArea className="flex-1 px-4">
@@ -81,6 +87,7 @@ export function MessageList({
             <MessageItem key={message.id} message={message} />
           ))
         )}
+        <div ref={bottomRef} />
       </div>
     </ScrollArea>
   );

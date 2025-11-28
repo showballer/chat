@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ChatBI - 智能数据查询系统",
+  title: "人效助手",
   description: "基于自然语言的数据库查询系统",
 };
 
