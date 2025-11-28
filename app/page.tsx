@@ -345,7 +345,7 @@ export default function Home() {
 
   const handleSendMessage = async (content: string) => {
     // 如果没有当前对话，先创建一个
-    let targetConversation = currentConversation;
+    let targetConversation:any = currentConversation;
     if (!targetConversation) {
       try {
         const response = await fetch("/api/conversations", {

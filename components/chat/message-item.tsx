@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { User, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { User, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle2, BarChart3 } from "lucide-react";
 import { QueryResultTable } from "./query-result-table";
+import { ChartContainer, ChartConfig } from "@/components/charts/chart-container";
 import ReactMarkdown from "react-markdown";
 
 // 处理流式 Markdown 可能缺少换行/闭合的代码块，避免渲染残缺
@@ -61,11 +62,99 @@ export function MessageItem({ message }: MessageItemProps) {
   const [showSQL, setShowSQL] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
   const [showResult, setShowResult] = useState(message.isNew !== false);
+  const [showChart, setShowChart] = useState(false);
+  const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null);
+  const [isGeneratingChart, setIsGeneratingChart] = useState(false);
 
   const isUser = message.role === "user";
   const isProcessing = message.status === "processing";
   const isError = message.status === "error";
   const isCompleted = message.status === "completed";
+
+  // 模拟生成图表的接口调用
+  const handleGenerateChart = async () => {
+    setIsGeneratingChart(true);
+
+    // 模拟 API 调用延迟
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // 模拟从接口获取的图表配置
+    // 这里根据查询结果数据自动判断图表类型
+    const data = message.queryResult;
+
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      setIsGeneratingChart(false);
+      return;
+    }
+
+    const columns = Object.keys(data[0]);
+
+    // 如果只有1行数据，检查是否适合数字卡片展示
+    if (data.length === 1) {
+      // 单行单列或单行多列，使用数字卡片
+      const config: ChartConfig = {
+        type: 'stat',
+        data: data,
+      };
+      setChartConfig(config);
+      setShowChart(true);
+      setIsGeneratingChart(false);
+      return;
+    }
+
+    // 自动判断数据类型并生成图表配置
+    // 如果数据有2列，第一列是文本，第二列是数字，使用饼图/径向图
+    if (columns.length === 2) {
+      const firstColSample = data[0][columns[0]];
+      const secondColSample = data[0][columns[1]];
+
+      // 判断第二列是否为数字
+      if (typeof secondColSample === 'number' || !isNaN(Number(secondColSample))) {
+        // 使用饼图，支持切换到径向图
+        const config: ChartConfig = {
+          type: 'pie',
+          data: data.slice(0, 5), // 限制最多5项，避免图表过于拥挤
+          nameKey: columns[0],
+          valueKey: columns[1],
+          supportedTypes: ['pie', 'radial'],
+        };
+        setChartConfig(config);
+        setShowChart(true);
+        setIsGeneratingChart(false);
+        return;
+      }
+    }
+
+    // 如果数据有多列，尝试使用柱状图/面积图
+    if (columns.length >= 2) {
+      // 找到第一个数字列作为 Y 轴
+      let yKey = columns[1];
+      for (let i = 1; i < columns.length; i++) {
+        const sample = data[0][columns[i]];
+        if (typeof sample === 'number' || !isNaN(Number(sample))) {
+          yKey = columns[i];
+          break;
+        }
+      }
+
+      // 限制数据点数量，避免图表过于密集
+      const limitedData = data.length > 20 ? data.slice(0, 20) : data;
+
+      const config: ChartConfig = {
+        type: 'bar',
+        data: limitedData,
+        xKey: columns[0],
+        yKey: yKey,
+        supportedTypes: ['bar', 'area'],
+      };
+      setChartConfig(config);
+      setShowChart(true);
+      setIsGeneratingChart(false);
+      return;
+    }
+
+    setIsGeneratingChart(false);
+  };
 
   if (isUser) {
     return (
@@ -188,16 +277,46 @@ export function MessageItem({ message }: MessageItemProps) {
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                 <span className="text-sm font-medium">查询结果</span>
               </div>
-              {showResult ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGenerateChart();
+                  }}
+                  disabled={isGeneratingChart}
+                  className="px-3 py-1 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  {isGeneratingChart ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>生成中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <BarChart3 className="h-3 w-3" />
+                      <span>生成图表</span>
+                    </>
+                  )}
+                </button>
+                {showResult ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
             </div>
 
             {showResult && (
-              <div className="border-t p-4 bg-muted/20">
+              <div className="border-t p-4 bg-muted/20 space-y-4">
                 <QueryResultTable data={message.queryResult} />
+
+                {/* 图表展示区域 */}
+                {showChart && chartConfig && (
+                  <div className="mt-4 pt-4 border-t">
+                    <h4 className="text-sm font-medium mb-3">数据可视化</h4>
+                    <ChartContainer config={chartConfig} />
+                  </div>
+                )}
               </div>
             )}
           </div>
