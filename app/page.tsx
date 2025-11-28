@@ -210,7 +210,7 @@ export default function Home() {
     }
 
     // 7. 流式内容处理（不再截取 SQL 代码块，全部写入 AI 回答）
-    if (trimmedMessage === "" || trimmedMessage === "```" || trimmedMessage === "``" || trimmedMessage === "`") {
+    if (trimmedMessage === "") {
       return;
     }
     aiAnswerRef.current += message;

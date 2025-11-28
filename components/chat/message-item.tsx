@@ -6,6 +6,41 @@ import { User, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle2 } from "lucide
 import { QueryResultTable } from "./query-result-table";
 import ReactMarkdown from "react-markdown";
 
+// 处理流式 Markdown 可能缺少换行/闭合的代码块，避免渲染残缺
+const stripInlineBackticks = (content: string) => {
+  // 移除单个反引号，避免非代码内容被包成行内代码；保留 ``` fenced code
+  return content.replace(/(?<!`)`(?!`)/g, "");
+};
+
+const normalizeMarkdown = (content: string) => {
+  if (!content) return content;
+  let fixed = stripInlineBackticks(content);
+
+  // 移除代码块语言标识，避免首行出现 "sql"
+  fixed = fixed.replace(/```sql/gi, "```");
+
+  // 确保 ```sql / ``` 后有换行，避免粘连
+  fixed = fixed.replace(/```\s*([^\n])/gi, "```\n$1");
+  fixed = fixed.replace(/```(?!\n)/g, "```\n");
+
+  const fences = [...fixed.matchAll(/```/g)].map((m) => m.index ?? 0);
+
+  // 如果只有开头没有结尾（奇数个），尝试在第一个空行前补闭合；否则追加在末尾
+  if (fences.length % 2 === 1 && fences.length > 0) {
+    const firstFenceIndex = fences[0];
+    const afterFence = fixed.slice(firstFenceIndex + 3);
+    const doubleNewline = afterFence.indexOf("\n\n");
+    if (doubleNewline !== -1) {
+      const insertPos = firstFenceIndex + 3 + doubleNewline;
+      fixed = `${fixed.slice(0, insertPos)}\n\`\`\`\n${fixed.slice(insertPos)}`;
+    } else {
+      fixed = `${fixed}\n\`\`\``;
+    }
+  }
+
+  return fixed;
+};
+
 interface Message {
   id: string;
   role: string;
@@ -59,11 +94,8 @@ export function MessageItem({ message }: MessageItemProps) {
               components={{
                 code({ inline, className, children }) {
                   if (inline) {
-                    return (
-                      <code className="px-1 py-0.5 rounded bg-muted text-xs">
-                        {children}
-                      </code>
-                    );
+                    // 行内代码当普通文本渲染，避免误判
+                    return <span>{children}</span>;
                   }
                   return (
                     <pre className="my-2 rounded-md bg-muted p-3 text-xs overflow-auto">
@@ -85,7 +117,7 @@ export function MessageItem({ message }: MessageItemProps) {
                 },
               }}
             >
-              {message.content}
+              {normalizeMarkdown(message.content)}
             </ReactMarkdown>
           </div>
         )}
