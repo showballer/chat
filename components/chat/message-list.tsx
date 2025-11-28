@@ -29,10 +29,12 @@ export function MessageList({
   disabled,
 }: MessageListProps) {
   const suggestions = [
-    "查询所有员工信息",
-    "统计各部门人数",
-    "查询技术部员工",
-    "按薪资排序查询",
+    "在第一季度中，智能云网部，有多少前评审项目",
+    "在2025年6月，大数据事业部的工时成本，主要分布于哪三个项目中",
+    "输出一份8月填报工时超过应填工时的人员清单",
+    "8月冯潇俊填报了多少工时？",
+    "各部门6月填报率情况",
+    "基于岗位输出一份“LX2024-DS072-松江区数据资源平台建设（二期）”项目中人数的分布",
   ];
 
   return (
@@ -47,7 +49,7 @@ export function MessageList({
                 </div>
                 <div className="space-y-4 text-foreground">
                   <h3 className="text-4xl font-semibold bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-500 bg-clip-text text-transparent">
-                    数据查询助手
+                    人效助手
                   </h3>
                   <p className="text-base text-muted-foreground">
                     输入自然语言查询，我会为你生成SQL并返回结果
