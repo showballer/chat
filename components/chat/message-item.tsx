@@ -63,14 +63,25 @@ export function MessageItem({ message }: MessageItemProps) {
   const [showSQL, setShowSQL] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
   const [showResult, setShowResult] = useState(message.isNew !== false);
-  const [showChart, setShowChart] = useState(false);
-  const [chartConfig, setChartConfig] = useState<ChartConfig | null>(null);
+  const [showChart, setShowChart] = useState(!!message.chartData);
+  const [chartConfig, setChartConfig] = useState<ChartConfig | null>(
+    message.chartData ? {
+      type: message.chartData.type,
+      data: message.chartData.data,
+      xKey: message.chartData.xKey,
+      yKey: message.chartData.yKey,
+      nameKey: message.chartData.nameKey,
+      valueKey: message.chartData.valueKey,
+      supportedTypes: message.chartData.supportedTypes,
+    } : null
+  );
   const [isGeneratingChart, setIsGeneratingChart] = useState(false);
 
   const isUser = message.role === "user";
   const isProcessing = message.status === "processing";
   const isError = message.status === "error";
   const isCompleted = message.status === "completed";
+  const hasChartData = !!chartConfig;
 
   // 调用后端接口生成图表
   const handleGenerateChart = async () => {
@@ -250,12 +261,12 @@ export function MessageItem({ message }: MessageItemProps) {
                   {isGeneratingChart ? (
                     <>
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      <span>生成中...</span>
+                      <span>{hasChartData ? "重新生成中..." : "生成中..."}</span>
                     </>
                   ) : (
                     <>
                       <BarChart3 className="h-3 w-3" />
-                      <span>生成图表</span>
+                      <span>{hasChartData ? "重新生成" : "生成图表"}</span>
                     </>
                   )}
                 </button>
