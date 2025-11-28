@@ -79,6 +79,21 @@ export function MessageList({
                     </button>
                   ))}
                 </div>
+                <div className="rounded-xl border border-muted bg-background/60 p-4 shadow-sm">
+                  <p className="text-xs font-semibold text-muted-foreground mb-3">
+                    提问小贴士：可以从这些维度发问
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2 text-xs leading-relaxed text-muted-foreground">
+                    <div>
+                      <p className="font-medium text-foreground mb-1">项目 · 工时表信息</p>
+                      <p>项目名称、项目类型、前评审编号、项目经理名称、项目允许填报最大工时数、项目起止时间、项目所属部门、所属二级部门、项目当月填报工时数、项目收入、项目成本、投入产出比</p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground mb-1">员工 · 工时表信息</p>
+                      <p>项目编号、项目名称、人员编号、人员加入项目的时间、人员名字、人员所属部门、所属二级部门、人员岗位名称、人员工时填报数、某项目人员填报工时数</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
