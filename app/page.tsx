@@ -461,7 +461,11 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <MessageList messages={messages} />
+        <MessageList
+          messages={messages}
+          onSuggestionClick={handleSendMessage}
+          disabled={!isConnected || isProcessing}
+        />
         <ChatInput onSend={handleSendMessage} disabled={!isConnected || isProcessing} />
       </div>
     </div>
