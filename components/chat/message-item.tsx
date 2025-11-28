@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { User, Bot, Loader2, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { QueryResultTable } from "./query-result-table";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   id: string;
@@ -53,7 +54,40 @@ export function MessageItem({ message }: MessageItemProps) {
       <div className="flex-1 space-y-4 overflow-hidden">
         {/* AI 回答内容 */}
         {message.content && (
-          <div className="text-sm leading-relaxed">{message.content}</div>
+          <div className="text-sm leading-relaxed">
+            <ReactMarkdown
+              components={{
+                code({ inline, className, children }) {
+                  if (inline) {
+                    return (
+                      <code className="px-1 py-0.5 rounded bg-muted text-xs">
+                        {children}
+                      </code>
+                    );
+                  }
+                  return (
+                    <pre className="my-2 rounded-md bg-muted p-3 text-xs overflow-auto">
+                      <code className={className}>{children}</code>
+                    </pre>
+                  );
+                },
+                p({ children }) {
+                  return <p className="mb-2">{children}</p>;
+                },
+                ul({ children }) {
+                  return <ul className="mb-2 list-disc pl-5 space-y-1">{children}</ul>;
+                },
+                ol({ children }) {
+                  return <ol className="mb-2 list-decimal pl-5 space-y-1">{children}</ol>;
+                },
+                li({ children }) {
+                  return <li className="leading-relaxed">{children}</li>;
+                },
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
         )}
 
         {/* 处理中状态 */}
