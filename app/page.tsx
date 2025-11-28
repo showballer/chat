@@ -22,6 +22,7 @@ interface Message {
   content: string;
   sqlQuery?: string | null;
   queryResult?: any;
+  chartData?: any;
   status?: string | null;
   errorMessage?: string | null;
   createdAt: Date;

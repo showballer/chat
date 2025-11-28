@@ -48,6 +48,7 @@ interface Message {
   content: string;
   sqlQuery?: string | null;
   queryResult?: any;
+  chartData?: any;
   status?: string | null;
   errorMessage?: string | null;
   createdAt: Date;
@@ -71,89 +72,48 @@ export function MessageItem({ message }: MessageItemProps) {
   const isError = message.status === "error";
   const isCompleted = message.status === "completed";
 
-  // 模拟生成图表的接口调用
+  // 调用后端接口生成图表
   const handleGenerateChart = async () => {
     setIsGeneratingChart(true);
 
-    // 模拟 API 调用延迟
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // 调用后端接口
+      const response = await fetch(`/api/messages/${message.id}/generate-chart`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-    // 模拟从接口获取的图表配置
-    // 这里根据查询结果数据自动判断图表类型
-    const data = message.queryResult;
-
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      setIsGeneratingChart(false);
-      return;
-    }
-
-    const columns = Object.keys(data[0]);
-
-    // 如果只有1行数据，检查是否适合数字卡片展示
-    if (data.length === 1) {
-      // 单行单列或单行多列，使用数字卡片
-      const config: ChartConfig = {
-        type: 'stat',
-        data: data,
-      };
-      setChartConfig(config);
-      setShowChart(true);
-      setIsGeneratingChart(false);
-      return;
-    }
-
-    // 自动判断数据类型并生成图表配置
-    // 如果数据有2列，第一列是文本，第二列是数字，使用饼图/径向图
-    if (columns.length === 2) {
-      const firstColSample = data[0][columns[0]];
-      const secondColSample = data[0][columns[1]];
-
-      // 判断第二列是否为数字
-      if (typeof secondColSample === 'number' || !isNaN(Number(secondColSample))) {
-        // 使用饼图，支持切换到径向图
-        const config: ChartConfig = {
-          type: 'pie',
-          data: data.slice(0, 5), // 限制最多5项，避免图表过于拥挤
-          nameKey: columns[0],
-          valueKey: columns[1],
-          supportedTypes: ['pie', 'radial'],
-        };
-        setChartConfig(config);
-        setShowChart(true);
+      if (!response.ok) {
+        console.error('Failed to generate chart');
         setIsGeneratingChart(false);
         return;
       }
-    }
 
-    // 如果数据有多列，尝试使用柱状图/面积图
-    if (columns.length >= 2) {
-      // 找到第一个数字列作为 Y 轴
-      let yKey = columns[1];
-      for (let i = 1; i < columns.length; i++) {
-        const sample = data[0][columns[i]];
-        if (typeof sample === 'number' || !isNaN(Number(sample))) {
-          yKey = columns[i];
-          break;
-        }
+      const result = await response.json();
+
+      if (result.success && result.chartData) {
+        // 构建图表配置
+        const chartData = result.chartData;
+        const config: ChartConfig = {
+          type: chartData.type,
+          data: chartData.data,
+          xKey: chartData.xKey,
+          yKey: chartData.yKey,
+          nameKey: chartData.nameKey,
+          valueKey: chartData.valueKey,
+          supportedTypes: chartData.supportedTypes,
+        };
+
+        setChartConfig(config);
+        setShowChart(true);
       }
-
-      // 限制数据点数量，避免图表过于密集
-      const limitedData = data.length > 20 ? data.slice(0, 20) : data;
-
-      const config: ChartConfig = {
-        type: 'bar',
-        data: limitedData,
-        xKey: columns[0],
-        yKey: yKey,
-        supportedTypes: ['bar', 'area'],
-      };
-      setChartConfig(config);
-      setShowChart(true);
+    } catch (error) {
+      console.error('Error generating chart:', error);
+    } finally {
       setIsGeneratingChart(false);
-      return;
     }
-
-    setIsGeneratingChart(false);
   };
 
   if (isUser) {
@@ -181,7 +141,8 @@ export function MessageItem({ message }: MessageItemProps) {
           <div className="text-sm leading-relaxed">
             <ReactMarkdown
               components={{
-                code({ inline, className, children }) {
+                code({ className, children, ...props }) {
+                  const inline = !className?.includes('language-');
                   if (inline) {
                     // 行内代码当普通文本渲染，避免误判
                     return <span>{children}</span>;

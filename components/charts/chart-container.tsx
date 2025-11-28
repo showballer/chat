@@ -54,7 +54,6 @@ export function ChartContainer({ config }: { config: ChartConfig }) {
             data={config.data}
             xKey={config.xKey!}
             yKey={config.yKey!}
-            color={config.color}
           />
         );
       case "bar":
@@ -63,7 +62,6 @@ export function ChartContainer({ config }: { config: ChartConfig }) {
             data={config.data}
             xKey={config.xKey!}
             yKey={config.yKey!}
-            color={config.color}
           />
         );
       case "pie":
@@ -72,7 +70,6 @@ export function ChartContainer({ config }: { config: ChartConfig }) {
             data={config.data}
             nameKey={config.nameKey!}
             valueKey={config.valueKey!}
-            colors={config.colors}
           />
         );
       case "radial":
@@ -81,7 +78,6 @@ export function ChartContainer({ config }: { config: ChartConfig }) {
             data={config.data}
             nameKey={config.nameKey!}
             valueKey={config.valueKey!}
-            colors={config.colors}
           />
         );
       case "stat":
